@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "regions": [
+    "iad1"
+  ]
+}
