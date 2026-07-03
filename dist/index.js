@@ -75,8 +75,14 @@ console.log("Relevant env vars present:", presentKeys.join(", "));
 const PORT = Number(process.env.PORT || 5000);
 const rawUri = process.env.MONGODB_URI || "";
 const MONGODB_URI = rawUri || "mongodb://localhost:27017/earnlab";
-if (!rawUri)
+if (rawUri) {
+    // Log first 30 chars of URI to verify the value (masking credentials)
+    const masked = rawUri.length > 10 ? rawUri.substring(0, 10) + "..." + rawUri.substring(rawUri.length - 10) : rawUri;
+    console.log("MONGODB_URI value (masked):", JSON.stringify(masked), "length:", rawUri.length);
+}
+else {
     console.log("MONGODB_URI env var is NOT SET — using localhost fallback");
+}
 const NODE_ENV = process.env.NODE_ENV || "development";
 // --- MongoDB Connection Management for Serverless ---
 let isConnecting = false;
