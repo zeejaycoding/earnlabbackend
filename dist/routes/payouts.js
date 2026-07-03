@@ -77,7 +77,7 @@ router.post('/user/withdrawals/request', requireAuth_1.default, (0, express_vali
         if (!errors.isEmpty()) {
             return res.status(400).json({ message: 'Validation error', errors: errors.array() });
         }
-        const { amountCents, method, destination, giftCardType } = req.body;
+        const { amountCents, method, destination, giftCardType, cryptoType } = req.body;
         const user = req.user;
         // Validate method
         const validMethods = ['crypto', 'paypal', 'giftcard', 'bank_transfer'];
@@ -112,6 +112,10 @@ router.post('/user/withdrawals/request', requireAuth_1.default, (0, express_vali
         // Only add giftCardType if method is giftcard
         if (method === 'giftcard') {
             withdrawalData.giftCardType = giftCardType;
+        }
+        // Save cryptoType if method is crypto
+        if (method === 'crypto' && cryptoType) {
+            withdrawalData.cryptoType = cryptoType;
         }
         const withdrawal = await Withdrawal_1.default.create(withdrawalData);
         // Create notification for user

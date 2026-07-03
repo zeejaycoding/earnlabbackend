@@ -48,6 +48,7 @@ const Withdrawal_1 = __importDefault(require("../models/Withdrawal"));
 const ReferralEarning_1 = __importDefault(require("../models/ReferralEarning"));
 const PremiumOffer_1 = __importDefault(require("../models/PremiumOffer"));
 const SystemSettings_1 = __importDefault(require("../models/SystemSettings"));
+const Notification_1 = __importDefault(require("../models/Notification"));
 const activityProgression_1 = require("../utils/activityProgression");
 const offerwallsRouter = (0, express_1.Router)();
 const gamesRouter = (0, express_1.Router)();
@@ -906,6 +907,57 @@ offerwallsRouter.get("/recent-activity", async (req, res, next) => {
                 countriesRepresentedCount,
                 windowHours: 24,
             },
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+/**
+ * --- Survey completion endpoint ---
+ *
+ * POST /api/v1/surveys/complete
+ * Saves onboarding/profile answers, marks profile as completed,
+ * and increments survey completion stats.
+ * Body: { providerId, providerName, answers: { ... }, completedAt }
+ */
+offerwallsRouter.post("/surveys/complete", requireAuth, async (req, res, next) => {
+    try {
+        const user = req.user;
+        const { providerId, providerName, answers, completedAt } = req.body;
+        if (!answers || typeof answers !== "object") {
+            return res.status(400).json({ message: "Survey answers are required" });
+        }
+        // Save survey answers and mark profile as completed
+        user.surveyAnswers = answers;
+        user.profileCompleted = true;
+        // Increment surveys completed stat
+        if (!user.activityStats) {
+            user.activityStats = { surveysCompleted: 1, offersCompleted: 0, successfulReferrals: 0, dailyLogins: 0 };
+        }
+        else {
+            user.activityStats.surveysCompleted = (user.activityStats.surveysCompleted || 0) + 1;
+        }
+        // Update activity score for survey completion
+        user.activityScore = (user.activityScore || 0) + 3;
+        await user.save();
+        // Create a notification
+        try {
+            await Notification_1.default.create({
+                user: user._id,
+                type: "success",
+                title: "Profile Survey Completed",
+                body: "Your onboarding survey is complete! You can now access survey offerwalls and tasks.",
+                read: false,
+            });
+        }
+        catch (_notifErr) {
+            // notification is non-critical
+        }
+        return res.status(200).json({
+            message: "Survey completed successfully! Your profile has been updated.",
+            profileCompleted: true,
+            provider: providerName || providerId || null,
         });
     }
     catch (err) {

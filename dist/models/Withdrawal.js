@@ -10,6 +10,7 @@ const schema = new mongoose_1.default.Schema({
     method: { type: String, required: true, enum: ['crypto', 'paypal', 'giftcard', 'bank_transfer'] },
     destination: { type: String, required: true },
     status: { type: String, required: true, default: 'Pending', enum: ['Pending', 'Approved', 'Rejected', 'Completed', 'Cancelled'], index: true },
+    cryptoType: { type: String, default: null },
     giftCardType: { type: String, enum: ['amazon', 'google_play', 'apple_itunes', 'steam', 'xbox', 'playstation', null], default: null, sparse: true },
     giftCardDenomination: { type: Number, default: null },
     giftCardCurrency: { type: String, enum: ['USD', 'EUR', null], default: null, sparse: true },

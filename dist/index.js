@@ -67,12 +67,16 @@ const morgan = require("morgan");
 const mongoose_1 = __importDefault(require("mongoose"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
-// Load .env file if present
-dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), ".env") });
-// Check if CLERK_SECRET_KEY is set
-console.log("CLERK_SECRET_KEY present?", !!process.env.CLERK_SECRET_KEY);
+// Load .env file if present (never override existing env vars)
+dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), ".env"), override: false });
+// Log which env vars are present (keys only, for debugging Render deployment)
+const presentKeys = Object.keys(process.env).filter(k => k.startsWith("MONGODB") || k.startsWith("CLERK") || k.startsWith("JWT") || k.startsWith("SMTP"));
+console.log("Relevant env vars present:", presentKeys.join(", "));
 const PORT = Number(process.env.PORT || 5000);
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/earnlab";
+const rawUri = process.env.MONGODB_URI || "";
+const MONGODB_URI = rawUri || "mongodb://localhost:27017/earnlab";
+if (!rawUri)
+    console.log("MONGODB_URI env var is NOT SET — using localhost fallback");
 const NODE_ENV = process.env.NODE_ENV || "development";
 // --- MongoDB Connection Management for Serverless ---
 let isConnecting = false;

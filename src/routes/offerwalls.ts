@@ -9,6 +9,7 @@ import Withdrawal from "../models/Withdrawal";
 import ReferralEarning from "../models/ReferralEarning";
 import PremiumOffer from "../models/PremiumOffer";
 import SystemSettings from "../models/SystemSettings";
+import Notification from "../models/Notification";
 import {
   calculateActivityProgress,
   evaluateAndMergeBadges,
@@ -1124,7 +1125,6 @@ offerwallsRouter.post(
 
       // Create a notification
       try {
-        const Notification = (await import("../models/Notification")).default;
         await Notification.create({
           user: user._id,
           type: "success",

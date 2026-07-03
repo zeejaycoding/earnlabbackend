@@ -31,15 +31,17 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import path from "path";
 
-// Load .env file if present
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+// Load .env file if present (never override existing env vars)
+dotenv.config({ path: path.resolve(process.cwd(), ".env"), override: false });
 
-// Check if CLERK_SECRET_KEY is set
-console.log("CLERK_SECRET_KEY present?", !!process.env.CLERK_SECRET_KEY);
+// Log which env vars are present (keys only, for debugging Render deployment)
+const presentKeys = Object.keys(process.env).filter(k => k.startsWith("MONGODB") || k.startsWith("CLERK") || k.startsWith("JWT") || k.startsWith("SMTP"));
+console.log("Relevant env vars present:", presentKeys.join(", "));
 
 const PORT = Number(process.env.PORT || 5000);
-const MONGODB_URI =
-  process.env.MONGODB_URI || "mongodb://localhost:27017/earnlab";
+const rawUri = process.env.MONGODB_URI || "";
+const MONGODB_URI = rawUri || "mongodb://localhost:27017/earnlab";
+if (!rawUri) console.log("MONGODB_URI env var is NOT SET — using localhost fallback");
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 // --- MongoDB Connection Management for Serverless ---

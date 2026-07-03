@@ -171,6 +171,7 @@ router.get("/profile", requireAuth, async (req, res, next) => {
             affiliateCode: user.affiliateCode ?? null,
             referredBy: user.referredBy ?? null,
             profilePrivacy: user.profilePrivacy ?? 'public',
+            profileCompleted: user.profileCompleted === true,
             joinedAt: user.createdAt,
             activityScore: progression.activityScore,
             activityLevel: progression.currentLevel,
