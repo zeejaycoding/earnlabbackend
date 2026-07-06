@@ -14,6 +14,7 @@ import SystemSettings from "../models/SystemSettings";
 import PremiumOffer from "../models/PremiumOffer";
 import emailService from "../services/emailService";
 import { applyActivityEvent } from "../utils/activityProgression";
+import { getHoldTimeDaysForUser, calculateHoldUntil } from "../services/rewardHoldService";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
@@ -1055,24 +1056,33 @@ router.post(
       }
 
       const beforeStatus = log.status;
-      log.status = status;
-      log.approvedBy = req.admin!.email;
-      log.approvedAt = new Date();
 
-      if (status === "rejected" && reason) {
-        log.rejectionReason = reason;
+      if (status === "rejected") {
+        log.status = "rejected";
+        log.approvedBy = req.admin!.email;
+        log.approvedAt = new Date();
+        if (reason) log.rejectionReason = reason;
+        await log.save();
       }
 
-      await log.save();
-
-      // If approved, credit user
+      // When admin approves, put reward on hold instead of crediting immediately
       if (status === "approved") {
+        log.status = "held";
+        log.approvedBy = req.admin!.email;
+        log.approvedAt = new Date();
+
+        const holdDays = await getHoldTimeDaysForUser(
+          log.user.toString(),
+          (log as any)?.metadata?.holdTimeDays,
+        );
+        log.holdUntil = calculateHoldUntil(holdDays);
+
+        await log.save();
+
         const settings = await SystemSettings.getSettings().catch(() => null);
         const user = await User.findById(log.user);
         if (user) {
-          user.balanceCents += log.amountCents;
-          if (!user.totalEarned) user.totalEarned = 0;
-          user.totalEarned += log.amountCents;
+          user.pendingBalanceCents = (user.pendingBalanceCents || 0) + log.amountCents;
 
           const offerContext = `${String(log.provider || "")} ${String(log.offerName || "")} ${String((log as any)?.metadata?.type || "")} ${String((log as any)?.metadata?.category || "")}`.toLowerCase();
           const eventType = offerContext.includes("survey")
@@ -1086,11 +1096,14 @@ router.post(
           await user.save();
 
           // Create notification
+          const holdDays = log.holdUntil
+            ? Math.ceil((log.holdUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            : 0;
           await Notification.create({
             user: user._id,
             type: "success",
             title: "Offer Approved",
-            body: `Your offer "${log.offerName}" has been approved. +$${(log.amountCents / 100).toFixed(2)}`,
+            body: `Your offer "${log.offerName}" has been approved for +$${(log.amountCents / 100).toFixed(2)} and is on hold. Available for withdrawal in ~${holdDays} day${holdDays !== 1 ? "s" : ""}.`,
             read: false,
           });
 

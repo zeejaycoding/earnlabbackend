@@ -2,6 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import requireAuth from '../utils/requireAuth';
 import User from '../models/User';
 import ReferralEarning from '../models/ReferralEarning';
+import OfferLog from '../models/OfferLog';
+import { getHoldTimeDaysForUser, calculateHoldUntil } from '../services/rewardHoldService';
 
 const router = Router();
 
@@ -54,11 +56,24 @@ router.post('/claim', requireAuth, async (req: Request, res: Response, next: Nex
     // mark claimed
     await ReferralEarning.updateMany({ referrer: user._id, claimed: false }, { $set: { claimed: true } }).exec();
 
-    // add to user balance
-    user.balanceCents = (user.balanceCents || 0) + total;
+    // add to user pending balance – hold period applies like offers/tasks
+    const holdDays = await getHoldTimeDaysForUser(user._id.toString());
+    const holdUntil = calculateHoldUntil(holdDays);
+    user.pendingBalanceCents = (user.pendingBalanceCents || 0) + total;
     await user.save();
 
-    return res.json({ claimedCents: total, newBalanceCents: user.balanceCents });
+    // create OfferLog to track the hold period for referral earnings
+    await OfferLog.create({
+      user: user._id,
+      offerId: `referral-${Date.now()}`,
+      provider: "referral",
+      offerName: "Referral earnings",
+      amountCents: total,
+      status: "held",
+      holdUntil,
+    });
+
+    return res.json({ claimedCents: total, pendingBalanceCents: user.pendingBalanceCents });
   } catch (err) {
     next(err);
   }

@@ -109,7 +109,7 @@ const systemSettingsSchema = new Schema<ISystemSettings>(
     },
     defaultHoldTimeDays: {
       type: Number,
-      default: 7,
+      default: 30,
       min: 0,
     },
     referralEnabled: {

@@ -136,6 +136,24 @@ app.get("/", (_req: Request, res: Response) => {
   res.send("earnlab backned is succesfully running");
 });
 
+// --- Reward hold release scheduler ---
+import { releaseExpiredHolds } from "./services/rewardHoldService";
+
+// Run every 5 minutes to release rewards that have passed their hold period
+const HOLD_RELEASE_INTERVAL_MS = 5 * 60 * 1000;
+let holdReleaseTimer: ReturnType<typeof setInterval> | null = null;
+
+async function runHoldRelease() {
+  try {
+    const released = await releaseExpiredHolds();
+    if (released > 0) {
+      console.log(`Released ${released} reward(s) from hold`);
+    }
+  } catch (err) {
+    console.error("Reward hold release error:", err);
+  }
+}
+
 // --- Mount routers ---
 //
 // Wire the concrete routers implemented under `src/routes/*` into the app.
@@ -307,6 +325,10 @@ async function start() {
         console.log(
           `Server listening on http://localhost:${PORT} (env=${NODE_ENV}) (dbConnected=${Boolean((app as any).locals.dbConnected)})`,
         );
+
+        // Start the reward hold release scheduler after server is ready
+        runHoldRelease();
+        holdReleaseTimer = setInterval(runHoldRelease, HOLD_RELEASE_INTERVAL_MS);
       });
 
     // graceful shutdown handlers
@@ -333,6 +355,13 @@ async function start() {
 async function shutdown() {
   // eslint-disable-next-line no-console
   console.log("Shutting down server...");
+
+  // Clear the hold release timer
+  if (holdReleaseTimer) {
+    clearInterval(holdReleaseTimer);
+    holdReleaseTimer = null;
+  }
+
   try {
     if (server) {
       // Only attempt to close the server if it's in a listening state.

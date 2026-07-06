@@ -6,8 +6,10 @@ import Task, { ITask } from "../models/Task";
 import User from "../models/User";
 import Notification from "../models/Notification";
 import FeedEvent from "../models/FeedEvent";
+import OfferLog from "../models/OfferLog";
 import SystemSettings from "../models/SystemSettings";
 import { applyActivityEvent } from "../utils/activityProgression";
+import { getHoldTimeDaysForUser, calculateHoldUntil } from "../services/rewardHoldService";
 
 const router = Router();
 
@@ -362,7 +364,7 @@ router.post(
         // mark task completed
         await taskDoc.save({ session });
 
-        // credit user
+        // credit user (pending balance – hold period applies)
         const dbUser = await User.findById(user._id).session(session).exec();
         if (!dbUser) {
           await session.abortTransaction();
@@ -371,13 +373,31 @@ router.post(
             .status(500)
             .json({ message: "User not found while crediting reward" });
         }
-        dbUser.balanceCents = (dbUser.balanceCents || 0) + reward;
+        dbUser.pendingBalanceCents = (dbUser.pendingBalanceCents || 0) + reward;
 
         applyActivityEvent(dbUser as any, activityEventType, {
           scoreConfig: (settings as any)?.activityScoreConfig,
         });
 
         await dbUser.save({ session });
+
+        // create OfferLog with hold status to track the hold period
+        const holdDays = await getHoldTimeDaysForUser(dbUser._id.toString());
+        const holdUntil = calculateHoldUntil(holdDays);
+        await OfferLog.create(
+          [
+            {
+              user: dbUser._id,
+              offerId: taskDoc._id.toString(),
+              provider: "task",
+              offerName: taskDoc.title || "Task",
+              amountCents: reward,
+              status: "held",
+              holdUntil,
+            },
+          ],
+          { session },
+        );
 
         // create feed event and notification
         const createdFeed = await FeedEvent.create(
@@ -430,8 +450,9 @@ router.post(
       }
 
       return res.json({
-        message: "Task completed and reward credited",
+        message: "Task completed and reward placed on hold",
         rewardCents: reward,
+        pending: true,
         task: taskDoc,
       });
     } catch (err) {

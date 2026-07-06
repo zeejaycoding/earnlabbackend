@@ -46,6 +46,7 @@ export interface IUser extends Document {
   // earnings tracking
   totalEarned?: number; // total points ever earned
   totalPaidOut?: number; // total points paid out
+  pendingBalanceCents: number; // rewards in hold period, not yet withdrawable
   // fraud detection
   lastLoginIp?: string | null;
   lastLoginDevice?: string | null;
@@ -292,6 +293,12 @@ const userSchema = new mongoose.Schema<IUser>(
       default: "active",
     },
     balanceCents: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+    },
+    pendingBalanceCents: {
       type: Number,
       required: true,
       default: 0,

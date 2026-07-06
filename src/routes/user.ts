@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 import User, { IUser } from "../models/User";
 import PromoCode from "../models/PromoCode";
+import OfferLog from "../models/OfferLog";
 import SystemSettings from "../models/SystemSettings";
 import {
   calculateActivityProgress,
@@ -203,6 +204,7 @@ router.get(
         avatarUrl: user.avatarUrl ?? null,
         email: user.email,
         balanceCents: user.balanceCents,
+        pendingBalanceCents: (user as any).pendingBalanceCents ?? 0,
         affiliateCode: user.affiliateCode ?? null,
         referredBy: user.referredBy ?? null,
         profilePrivacy: (user as any).profilePrivacy ?? 'public',
@@ -214,9 +216,10 @@ router.get(
 
       const stats = {
         balanceCents: user.balanceCents,
+        pendingBalanceCents: (user as any).pendingBalanceCents ?? 0,
         tasksCompleted: completedTotal,
         tasksInProgress: 0,
-        lifetimeEarningsCents: user.balanceCents,
+        lifetimeEarningsCents: (user.balanceCents || 0) + ((user as any).pendingBalanceCents || 0),
         lastActive: user.updatedAt,
         offersCompleted: activityStats.offersCompleted,
         surveysCompleted: activityStats.surveysCompleted,
@@ -230,6 +233,45 @@ router.get(
         progression,
         badges,
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * GET /api/v1/user/offer-logs
+ * Returns the authenticated user's offer logs (earnings history) with hold/pending status.
+ */
+router.get(
+  "/offer-logs",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user as any;
+      const logs = await OfferLog.find({ user: user._id })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean()
+        .exec();
+
+      const now = new Date();
+      const items = logs.map((log: any) => ({
+        _id: log._id,
+        offerName: log.offerName,
+        provider: log.provider,
+        amountCents: log.amountCents,
+        status: log.status,
+        holdUntil: log.holdUntil,
+        holdRemainingDays:
+          log.status === "held" && log.holdUntil
+            ? Math.max(0, Math.ceil((log.holdUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+            : 0,
+        createdAt: log.createdAt,
+        approvedAt: log.approvedAt,
+      }));
+
+      return res.json({ items });
     } catch (err) {
       next(err);
     }
