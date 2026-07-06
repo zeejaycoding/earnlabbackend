@@ -10,6 +10,7 @@ const dayjs_1 = __importDefault(require("dayjs"));
 const crypto_1 = __importDefault(require("crypto"));
 const User_1 = __importDefault(require("../models/User"));
 const PromoCode_1 = __importDefault(require("../models/PromoCode"));
+const OfferLog_1 = __importDefault(require("../models/OfferLog"));
 const SystemSettings_1 = __importDefault(require("../models/SystemSettings"));
 const activityProgression_1 = require("../utils/activityProgression");
 const router = (0, express_1.Router)();
@@ -168,6 +169,7 @@ router.get("/profile", requireAuth, async (req, res, next) => {
             avatarUrl: user.avatarUrl ?? null,
             email: user.email,
             balanceCents: user.balanceCents,
+            pendingBalanceCents: user.pendingBalanceCents ?? 0,
             affiliateCode: user.affiliateCode ?? null,
             referredBy: user.referredBy ?? null,
             profilePrivacy: user.profilePrivacy ?? 'public',
@@ -178,9 +180,10 @@ router.get("/profile", requireAuth, async (req, res, next) => {
         };
         const stats = {
             balanceCents: user.balanceCents,
+            pendingBalanceCents: user.pendingBalanceCents ?? 0,
             tasksCompleted: completedTotal,
             tasksInProgress: 0,
-            lifetimeEarningsCents: user.balanceCents,
+            lifetimeEarningsCents: (user.balanceCents || 0) + (user.pendingBalanceCents || 0),
             lastActive: user.updatedAt,
             offersCompleted: activityStats.offersCompleted,
             surveysCompleted: activityStats.surveysCompleted,
@@ -193,6 +196,38 @@ router.get("/profile", requireAuth, async (req, res, next) => {
             progression,
             badges,
         });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+/**
+ * GET /api/v1/user/offer-logs
+ * Returns the authenticated user's offer logs (earnings history) with hold/pending status.
+ */
+router.get("/offer-logs", requireAuth, async (req, res, next) => {
+    try {
+        const user = req.user;
+        const logs = await OfferLog_1.default.find({ user: user._id })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean()
+            .exec();
+        const now = new Date();
+        const items = logs.map((log) => ({
+            _id: log._id,
+            offerName: log.offerName,
+            provider: log.provider,
+            amountCents: log.amountCents,
+            status: log.status,
+            holdUntil: log.holdUntil,
+            holdRemainingDays: log.status === "held" && log.holdUntil
+                ? Math.max(0, Math.ceil((log.holdUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+                : 0,
+            createdAt: log.createdAt,
+            approvedAt: log.approvedAt,
+        }));
+        return res.json({ items });
     }
     catch (err) {
         next(err);

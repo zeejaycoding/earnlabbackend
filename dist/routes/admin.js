@@ -19,6 +19,7 @@ const SystemSettings_1 = __importDefault(require("../models/SystemSettings"));
 const PremiumOffer_1 = __importDefault(require("../models/PremiumOffer"));
 const emailService_1 = __importDefault(require("../services/emailService"));
 const activityProgression_1 = require("../utils/activityProgression");
+const rewardHoldService_1 = require("../services/rewardHoldService");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const router = (0, express_1.Router)();
@@ -826,22 +827,26 @@ router.post("/offer-logs/:logId/review", requireAdmin_1.requireAdmin, async (req
             return;
         }
         const beforeStatus = log.status;
-        log.status = status;
-        log.approvedBy = req.admin.email;
-        log.approvedAt = new Date();
-        if (status === "rejected" && reason) {
-            log.rejectionReason = reason;
+        if (status === "rejected") {
+            log.status = "rejected";
+            log.approvedBy = req.admin.email;
+            log.approvedAt = new Date();
+            if (reason)
+                log.rejectionReason = reason;
+            await log.save();
         }
-        await log.save();
-        // If approved, credit user
+        // When admin approves, put reward on hold instead of crediting immediately
         if (status === "approved") {
+            log.status = "held";
+            log.approvedBy = req.admin.email;
+            log.approvedAt = new Date();
+            const holdDays = await (0, rewardHoldService_1.getHoldTimeDaysForUser)(log.user.toString(), log?.metadata?.holdTimeDays);
+            log.holdUntil = (0, rewardHoldService_1.calculateHoldUntil)(holdDays);
+            await log.save();
             const settings = await SystemSettings_1.default.getSettings().catch(() => null);
             const user = await User_1.default.findById(log.user);
             if (user) {
-                user.balanceCents += log.amountCents;
-                if (!user.totalEarned)
-                    user.totalEarned = 0;
-                user.totalEarned += log.amountCents;
+                user.pendingBalanceCents = (user.pendingBalanceCents || 0) + log.amountCents;
                 const offerContext = `${String(log.provider || "")} ${String(log.offerName || "")} ${String(log?.metadata?.type || "")} ${String(log?.metadata?.category || "")}`.toLowerCase();
                 const eventType = offerContext.includes("survey")
                     ? "survey_completion"
@@ -851,11 +856,14 @@ router.post("/offer-logs/:logId/review", requireAdmin_1.requireAdmin, async (req
                 });
                 await user.save();
                 // Create notification
+                const holdDays = log.holdUntil
+                    ? Math.ceil((log.holdUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                    : 0;
                 await Notification_1.default.create({
                     user: user._id,
                     type: "success",
                     title: "Offer Approved",
-                    body: `Your offer "${log.offerName}" has been approved. +$${(log.amountCents / 100).toFixed(2)}`,
+                    body: `Your offer "${log.offerName}" has been approved for +$${(log.amountCents / 100).toFixed(2)} and is on hold. Available for withdrawal in ~${holdDays} day${holdDays !== 1 ? "s" : ""}.`,
                     read: false,
                 });
                 // Increment daily completions for premium offers

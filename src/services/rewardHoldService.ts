@@ -5,9 +5,9 @@ import SystemSettings from "../models/SystemSettings";
 export async function getDefaultHoldTimeDays(): Promise<number> {
   try {
     const settings = await SystemSettings.getSettings();
-    return settings.defaultHoldTimeDays ?? 7;
+    return settings.defaultHoldTimeDays ?? 30;
   } catch {
-    return 7;
+    return 30;
   }
 }
 

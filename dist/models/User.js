@@ -230,6 +230,12 @@ const userSchema = new mongoose_1.default.Schema({
         default: 0,
         min: 0,
     },
+    pendingBalanceCents: {
+        type: Number,
+        required: true,
+        default: 0,
+        min: 0,
+    },
     affiliateCode: {
         type: String,
         required: false,

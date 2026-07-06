@@ -11,8 +11,10 @@ const Task_1 = __importDefault(require("../models/Task"));
 const User_1 = __importDefault(require("../models/User"));
 const Notification_1 = __importDefault(require("../models/Notification"));
 const FeedEvent_1 = __importDefault(require("../models/FeedEvent"));
+const OfferLog_1 = __importDefault(require("../models/OfferLog"));
 const SystemSettings_1 = __importDefault(require("../models/SystemSettings"));
 const activityProgression_1 = require("../utils/activityProgression");
+const rewardHoldService_1 = require("../services/rewardHoldService");
 const router = (0, express_1.Router)();
 /**
  * GET /api/v1/tasks
@@ -295,7 +297,7 @@ router.post("/:id/complete", requireAuth_1.default, (0, express_validator_1.para
             session.startTransaction();
             // mark task completed
             await taskDoc.save({ session });
-            // credit user
+            // credit user (pending balance – hold period applies)
             const dbUser = await User_1.default.findById(user._id).session(session).exec();
             if (!dbUser) {
                 await session.abortTransaction();
@@ -304,11 +306,25 @@ router.post("/:id/complete", requireAuth_1.default, (0, express_validator_1.para
                     .status(500)
                     .json({ message: "User not found while crediting reward" });
             }
-            dbUser.balanceCents = (dbUser.balanceCents || 0) + reward;
+            dbUser.pendingBalanceCents = (dbUser.pendingBalanceCents || 0) + reward;
             (0, activityProgression_1.applyActivityEvent)(dbUser, activityEventType, {
                 scoreConfig: settings?.activityScoreConfig,
             });
             await dbUser.save({ session });
+            // create OfferLog with hold status to track the hold period
+            const holdDays = await (0, rewardHoldService_1.getHoldTimeDaysForUser)(dbUser._id.toString());
+            const holdUntil = (0, rewardHoldService_1.calculateHoldUntil)(holdDays);
+            await OfferLog_1.default.create([
+                {
+                    user: dbUser._id,
+                    offerId: taskDoc._id.toString(),
+                    provider: "task",
+                    offerName: taskDoc.title || "Task",
+                    amountCents: reward,
+                    status: "held",
+                    holdUntil,
+                },
+            ], { session });
             // create feed event and notification
             const createdFeed = await FeedEvent_1.default.create([
                 {
@@ -353,8 +369,9 @@ router.post("/:id/complete", requireAuth_1.default, (0, express_validator_1.para
             throw txErr;
         }
         return res.json({
-            message: "Task completed and reward credited",
+            message: "Task completed and reward placed on hold",
             rewardCents: reward,
+            pending: true,
             task: taskDoc,
         });
     }
