@@ -62,5 +62,42 @@ router.get("/streaks", requireAuth, async (req, res, next) => {
         next(err);
     }
 });
+/**
+ * GET /api/v1/rewards/bonus
+ * Returns signup bonus progress data (48h window from user creation).
+ */
+router.get("/bonus", requireAuth, async (req, res, next) => {
+    try {
+        const user = req.user;
+        const createdAt = user.createdAt ? new Date(user.createdAt) : new Date();
+        const expiresAt = (0, dayjs_1.default)(createdAt).add(48, "hour").toDate();
+        const now = new Date();
+        const timeRemainingMs = Math.max(0, expiresAt.getTime() - now.getTime());
+        const totalEarnedCents = (user.totalEarned || 0) + (user.balanceCents || 0);
+        const targetCents = 200;
+        const earnedSoFar = Math.min(totalEarnedCents, targetCents);
+        const progress = targetCents > 0 ? (earnedSoFar / targetCents) * 100 : 0;
+        const boxes = [
+            { id: 1, claimed: totalEarnedCents >= 25 },
+            { id: 2, claimed: totalEarnedCents >= 50 },
+            { id: 3, claimed: totalEarnedCents >= 200, highlight: true },
+            { id: 4, claimed: totalEarnedCents >= 5 },
+            { id: 5, claimed: totalEarnedCents >= 25 },
+            { id: 6, claimed: totalEarnedCents >= 50 },
+        ];
+        return res.json({
+            expiresAt,
+            timeRemainingMs,
+            earnedCents: earnedSoFar,
+            targetCents,
+            progress: Math.round(progress * 10) / 10,
+            boxes,
+            expired: timeRemainingMs <= 0,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
 exports.default = router;
 //# sourceMappingURL=rewards.js.map

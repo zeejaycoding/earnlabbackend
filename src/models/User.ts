@@ -75,6 +75,12 @@ export interface IUser extends Document {
   twoFactorSecret?: string | null;
   twoFactorTempSecret?: string | null;
   twoFactorBackupCodes?: string[];
+  // social media verification
+  socialVerifications?: {
+    telegram: boolean;
+    twitter: boolean;
+    discord: boolean;
+  };
   // activity progression (visual-only)
   activityScore?: number;
   activityStats?: {
@@ -347,6 +353,12 @@ const userSchema = new mongoose.Schema<IUser>(
       type: Schema.Types.Mixed,
       required: false,
       default: {},
+    },
+    // Social media verification fields
+    socialVerifications: {
+      telegram: { type: Boolean, default: false },
+      twitter: { type: Boolean, default: false },
+      discord: { type: Boolean, default: false },
     },
     // Two-Factor Authentication fields
     twoFactorEnabled: {

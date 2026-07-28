@@ -280,6 +280,12 @@ const userSchema = new mongoose_1.default.Schema({
         required: false,
         default: {},
     },
+    // Social media verification fields
+    socialVerifications: {
+        telegram: { type: Boolean, default: false },
+        twitter: { type: Boolean, default: false },
+        discord: { type: Boolean, default: false },
+    },
     // Two-Factor Authentication fields
     twoFactorEnabled: {
         type: Boolean,

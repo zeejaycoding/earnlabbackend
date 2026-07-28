@@ -1151,4 +1151,76 @@ router.post(
   },
 );
 
+// =============================================
+// Social Verification Routes
+// =============================================
+
+const VERIFICATION_REWARD_CENTS = 5;
+const VERIFICATION_PLATFORMS = ["telegram", "twitter", "discord"] as const;
+
+/**
+ * GET /api/v1/user/verifications
+ * Returns the current social verification status for the authenticated user.
+ */
+router.get(
+  "/verifications",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user: IUser = (req as any).user;
+      const sv = (user as any).socialVerifications || {};
+      return res.json({
+        verifications: {
+          telegram: !!sv.telegram,
+          twitter: !!sv.twitter,
+          discord: !!sv.discord,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * POST /api/v1/user/verifications/complete
+ * Marks a social platform as verified and credits $0.05.
+ * Body: { platform: "telegram" | "twitter" | "discord" }
+ */
+router.post(
+  "/verifications/complete",
+  requireAuth,
+  body("platform").isString().isIn(VERIFICATION_PLATFORMS),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(422).json({ errors: errors.array() });
+      }
+
+      const user: IUser = (req as any).user;
+      const { platform } = req.body as { platform: "telegram" | "twitter" | "discord" };
+
+      const sv = (user as any).socialVerifications || {};
+      if (sv[platform]) {
+        return res.status(400).json({ message: `${platform} already verified` });
+      }
+
+      sv[platform] = true;
+      (user as any).socialVerifications = sv;
+      user.balanceCents = (user.balanceCents || 0) + VERIFICATION_REWARD_CENTS;
+      await user.save();
+
+      return res.json({
+        message: `${platform} verified successfully`,
+        platform,
+        rewardCents: VERIFICATION_REWARD_CENTS,
+        newBalanceCents: user.balanceCents,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 export default router;

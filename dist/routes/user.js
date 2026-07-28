@@ -921,5 +921,62 @@ router.post("/change-password", requireAuth, async (req, res, next) => {
         next(err);
     }
 });
+// =============================================
+// Social Verification Routes
+// =============================================
+const VERIFICATION_REWARD_CENTS = 5;
+const VERIFICATION_PLATFORMS = ["telegram", "twitter", "discord"];
+/**
+ * GET /api/v1/user/verifications
+ * Returns the current social verification status for the authenticated user.
+ */
+router.get("/verifications", requireAuth, async (req, res, next) => {
+    try {
+        const user = req.user;
+        const sv = user.socialVerifications || {};
+        return res.json({
+            verifications: {
+                telegram: !!sv.telegram,
+                twitter: !!sv.twitter,
+                discord: !!sv.discord,
+            },
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+/**
+ * POST /api/v1/user/verifications/complete
+ * Marks a social platform as verified and credits $0.05.
+ * Body: { platform: "telegram" | "twitter" | "discord" }
+ */
+router.post("/verifications/complete", requireAuth, (0, express_validator_1.body)("platform").isString().isIn(VERIFICATION_PLATFORMS), async (req, res, next) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(422).json({ errors: errors.array() });
+        }
+        const user = req.user;
+        const { platform } = req.body;
+        const sv = user.socialVerifications || {};
+        if (sv[platform]) {
+            return res.status(400).json({ message: `${platform} already verified` });
+        }
+        sv[platform] = true;
+        user.socialVerifications = sv;
+        user.balanceCents = (user.balanceCents || 0) + VERIFICATION_REWARD_CENTS;
+        await user.save();
+        return res.json({
+            message: `${platform} verified successfully`,
+            platform,
+            rewardCents: VERIFICATION_REWARD_CENTS,
+            newBalanceCents: user.balanceCents,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
 exports.default = router;
 //# sourceMappingURL=user.js.map
