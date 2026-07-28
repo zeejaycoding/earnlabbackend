@@ -329,8 +329,7 @@ router.post(
       room.lastMessageAt = msg.createdAt as any;
       await room.save();
 
-      // In production you'd notify support agents / push socket events here.
-      // Broadcast to all participants in the room via Socket.IO
+      // Broadcast user message to all participants in the room via Socket.IO
       try {
         const io = (req as any).app?.locals?.io;
         if (io) {
@@ -345,6 +344,33 @@ router.post(
             },
           };
           io.to(`support:${room._id}`).emit("support:message", payload);
+        }
+      } catch (e) {
+        // socket broadcast is best-effort
+      }
+
+      // Auto-reply: send an acknowledgment system message
+      const autoReplyText = "Thank you for reaching out! Our team has received your message and will get back to you within 24 hours.";
+      const autoReplyMsg = await SupportChatMessage.create({
+        room: room._id,
+        senderUser: null,
+        senderRole: "system",
+        text: autoReplyText,
+      } as any);
+      try {
+        const io = (req as any).app?.locals?.io;
+        if (io) {
+          const autoPayload = {
+            room: room._id,
+            message: {
+              _id: autoReplyMsg._id,
+              room: room._id,
+              senderRole: "system",
+              text: autoReplyText,
+              createdAt: autoReplyMsg.createdAt,
+            },
+          };
+          io.to(`support:${room._id}`).emit("support:message", autoPayload);
         }
       } catch (e) {
         // socket broadcast is best-effort
