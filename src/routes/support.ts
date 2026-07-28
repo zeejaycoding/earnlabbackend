@@ -335,12 +335,14 @@ router.post(
         const io = (req as any).app?.locals?.io;
         if (io) {
           const payload = {
-            roomId: room._id,
-            messageId: msg._id,
-            senderUser: user._id,
-            senderRole: "user",
-            text,
-            createdAt: msg.createdAt,
+            room: room._id,
+            message: {
+              _id: msg._id,
+              room: room._id,
+              senderRole: "user",
+              text,
+              createdAt: msg.createdAt,
+            },
           };
           io.to(`support:${room._id}`).emit("support:message", payload);
         }

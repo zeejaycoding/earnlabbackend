@@ -302,6 +302,34 @@ async function start() {
                     // ignore invalid token
                 }
             });
+            // --- Chat room management ---
+            socket.on("chat:join", (data) => {
+                const room = data?.room || "general";
+                socket.join(`chat:${room}`);
+                // eslint-disable-next-line no-console
+                console.log(`Socket ${socket.id} joined chat:${room}`);
+            });
+            socket.on("chat:leave", (data) => {
+                const room = data?.room || "general";
+                socket.leave(`chat:${room}`);
+                // eslint-disable-next-line no-console
+                console.log(`Socket ${socket.id} left chat:${room}`);
+            });
+            // --- Support chat room management ---
+            socket.on("support:join", (data) => {
+                if (data?.roomId) {
+                    socket.join(`support:${data.roomId}`);
+                    // eslint-disable-next-line no-console
+                    console.log(`Socket ${socket.id} joined support:${data.roomId}`);
+                }
+            });
+            socket.on("support:leave", (data) => {
+                if (data?.roomId) {
+                    socket.leave(`support:${data.roomId}`);
+                    // eslint-disable-next-line no-console
+                    console.log(`Socket ${socket.id} left support:${data.roomId}`);
+                }
+            });
             socket.on("disconnect", () => {
                 // eslint-disable-next-line no-console
                 console.log(`Socket ${socket.id} disconnected`);
