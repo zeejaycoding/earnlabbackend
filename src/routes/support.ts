@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { body, validationResult, query, param } from "express-validator";
 import mongoose, { Schema, Document, Model } from "mongoose";
 import jwt from "jsonwebtoken";
-import requireAuth from "../utils/requireAuth";
+import User from "../models/User";
 
 const router = Router();
 
@@ -10,9 +10,8 @@ const JWT_SECRET = process.env.JWT_SECRET || "please-change-this-secret";
 
 /**
  * Lenient auth middleware for support chat.
- * Tries softAuth first; if it fails (user not in DB), falls back
- * to decoding the token and creating a minimal user object so support
- * chat still works even on DB mismatches.
+ * Tries DB user lookup first; falls back to decoding the token and creating
+ * a minimal user object so support chat still works even on DB mismatches.
  */
 const softAuth = async (req: Request, res: Response, next: NextFunction) => {
   const auth = req.header("authorization");
@@ -20,15 +19,24 @@ const softAuth = async (req: Request, res: Response, next: NextFunction) => {
     return res.status(401).json({ message: "Missing or invalid Authorization header" });
   }
   const token = auth.slice(7).trim();
+
+  // Try DB lookup first
   try {
-    // Try strict auth first
-    await requireAuth(req, res, (err?: any) => {
-      if (!err) return next();
-    });
-    return;
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const userId = decoded.sub || decoded.userId || decoded.id;
+    if (userId) {
+      const user = await User.findById(userId).exec();
+      if (user) {
+        (req as any).user = user;
+        (req as any).authToken = token;
+        return next();
+      }
+    }
   } catch {
-    // fallback: decode token and build a minimal user
+    // DB lookup failed, fall through
   }
+
+  // Fallback: build user from token data
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     (req as any).user = {
