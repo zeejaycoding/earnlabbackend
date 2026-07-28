@@ -968,6 +968,23 @@ router.post("/verifications/complete", requireAuth, (0, express_validator_1.body
         user.markModified("socialVerifications");
         user.balanceCents = (user.balanceCents || 0) + VERIFICATION_REWARD_CENTS;
         await user.save();
+        // Emit socket notification so TopBar etc. update balance in real-time
+        try {
+            const io = req.app.locals?.io;
+            if (io && user.id) {
+                const room = `user:${user.id}`;
+                io.to(room).emit("notification", {
+                    type: "verification.complete",
+                    title: `${platform} verified`,
+                    body: `You earned $${(VERIFICATION_REWARD_CENTS / 100).toFixed(2)} for verifying ${platform}`,
+                    rewardCents: VERIFICATION_REWARD_CENTS,
+                    newBalanceCents: user.balanceCents,
+                });
+            }
+        }
+        catch (e) {
+            // socket broadcast is best-effort
+        }
         return res.json({
             message: `${platform} verified successfully`,
             platform,
