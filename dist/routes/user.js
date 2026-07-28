@@ -965,6 +965,7 @@ router.post("/verifications/complete", requireAuth, (0, express_validator_1.body
         }
         sv[platform] = true;
         user.socialVerifications = sv;
+        user.markModified("socialVerifications");
         user.balanceCents = (user.balanceCents || 0) + VERIFICATION_REWARD_CENTS;
         await user.save();
         return res.json({

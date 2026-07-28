@@ -1208,6 +1208,7 @@ router.post(
 
       sv[platform] = true;
       (user as any).socialVerifications = sv;
+      (user as any).markModified("socialVerifications");
       user.balanceCents = (user.balanceCents || 0) + VERIFICATION_REWARD_CENTS;
       await user.save();
 
