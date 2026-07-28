@@ -68,8 +68,8 @@ const ChatMessageSchema = new Schema<IChatMessage>(
   { timestamps: { createdAt: "createdAt", updatedAt: false } },
 );
 
-const ChatMessage: Model<IChatMessage> =
-  mongoose.models.ChatMessage || mongoose.model<IChatMessage>("ChatMessage", ChatMessageSchema);
+const SupportChatMessage: Model<IChatMessage> =
+  mongoose.models.SupportChatMessage || mongoose.model<IChatMessage>("SupportChatMessage", ChatMessageSchema);
 
 export interface IChatRoom extends Document {
   participants: mongoose.Types.ObjectId[]; // typically [userId, supportAgentId?]
@@ -216,7 +216,7 @@ router.get(
 
       const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 500);
 
-      const messages = await ChatMessage.find({ room: room._id })
+      const messages = await SupportChatMessage.find({ room: room._id })
         .sort({ createdAt: 1 })
         .limit(limit)
         .lean()
@@ -267,7 +267,7 @@ router.post(
       }
 
       // create message
-      const msg = await ChatMessage.create({
+      const msg = await SupportChatMessage.create({
         room: room._id,
         senderUser: user._id,
         senderRole: "user",
@@ -283,6 +283,24 @@ router.post(
       await room.save();
 
       // In production you'd notify support agents / push socket events here.
+      // Broadcast to all participants in the room via Socket.IO
+      try {
+        const io = (req as any).app?.locals?.io;
+        if (io) {
+          const payload = {
+            roomId: room._id,
+            messageId: msg._id,
+            senderUser: user._id,
+            senderRole: "user",
+            text,
+            createdAt: msg.createdAt,
+          };
+          io.to(`support:${room._id}`).emit("support:message", payload);
+        }
+      } catch (e) {
+        // socket broadcast is best-effort
+      }
+
       return res.status(201).json({ message: "Message sent", roomId: room._id, messageId: msg._id, sentAt: msg.createdAt });
     } catch (err) {
       next(err);
@@ -314,7 +332,7 @@ router.post(
       await room.save();
 
       // Optionally create a system message
-      await ChatMessage.create({
+      await SupportChatMessage.create({
         room: room._id,
         senderUser: null,
         senderRole: "system",

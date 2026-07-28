@@ -258,6 +258,16 @@ router.post("/messages", authMiddleware, async (req: AuthRequest, res: Response)
     };
 
     res.status(201).json({ message: responseMessage });
+
+    // Broadcast to all users in the room via Socket.IO
+    try {
+      const io = (req as any).app?.locals?.io;
+      if (io) {
+        io.to(`chat:${room}`).emit("chat:message", responseMessage);
+      }
+    } catch (e) {
+      // socket broadcast is best-effort
+    }
   } catch (err: any) {
     console.error("Send message error:", err);
     console.error("Error details:", {
